@@ -31,6 +31,16 @@ size_t epsi_start = cte_start + N;
 size_t delta_start = epsi_start + N;
 size_t a_start = delta_start + N - 1;
 
+double cost_cte = 3000.0;
+double cost_epsi = 3000.0;
+double cost_delta = 5.0;
+double cost_v = 1.0;
+double cost_a = 5.0;
+double cost_deltav = 700.0;
+double cost_deltadot = 200.0;
+double cost_adot = 10.0;
+
+
 class FG_eval {
  public:
   // Fitted polynomial coefficients
@@ -46,21 +56,21 @@ class FG_eval {
     fg[0] = 0;
 
     for (int i = 0; i < N; i++) {
-      fg[0] += 3000*CppAD::pow(vars[cte_start + i], 2);
-      fg[0] += 3000*CppAD::pow(vars[epsi_start + i], 2);
-      fg[0] += CppAD::pow(vars[v_start + i] - ref_v, 2);
+      fg[0] += cost_cte*CppAD::pow(vars[cte_start + i], 2);
+      fg[0] += cost_epsi*CppAD::pow(vars[epsi_start + i], 2);
+      fg[0] += cost_v*CppAD::pow(vars[v_start + i] - ref_v, 2);
     }
 
     for (int i = 0; i < N - 1; i++) {
-      fg[0] += 5*CppAD::pow(vars[delta_start + i], 2);
-      fg[0] += 5*CppAD::pow(vars[a_start + i], 2);
+      fg[0] += cost_delta*CppAD::pow(vars[delta_start + i], 2);
+      fg[0] += cost_a*CppAD::pow(vars[a_start + i], 2);
       // try adding penalty for speed + steer
-      fg[0] += 700*CppAD::pow(vars[delta_start + i] * vars[v_start+i], 2);
+      fg[0] += cost_deltav*CppAD::pow(vars[delta_start + i] * vars[v_start+i], 2);
     }
 
     for (int i = 0; i < N - 2; i++) {
-      fg[0] += 200*CppAD::pow(vars[delta_start + i + 1] - vars[delta_start + i], 2);
-      fg[0] += 10*CppAD::pow(vars[a_start + i + 1] - vars[a_start + i], 2);
+      fg[0] += cost_deltadot*CppAD::pow(vars[delta_start + i + 1] - vars[delta_start + i], 2);
+      fg[0] += cost_adot*CppAD::pow(vars[a_start + i + 1] - vars[a_start + i], 2);
     }
     // Initial constraints
     //
@@ -83,54 +93,31 @@ class FG_eval {
       AD<double> v0 = vars[v_start + t - 1];
       AD<double> cte0 = vars[cte_start + t - 1];
       AD<double> epsi0 = vars[epsi_start + t - 1];
-/*
-      AD<double> x0 = vars[x_start + t - 1];
-      AD<double> y0 = vars[y_start + t - 1];
-      AD<double> psi0 = vars[psi_start + t - 1];
-      AD<double> v0 = vars[v_start + t - 1];
-      AD<double> cte0 = vars[cte_start + t - 1];
-      AD<double> epsi0 = vars[epsi_start + t - 1];
-*/
+
       AD<double> x1 = vars[x_start + t];
       AD<double> y1 = vars[y_start + t];
       AD<double> psi1 = vars[psi_start + t];
       AD<double> v1 = vars[v_start + t];
       AD<double> cte1 = vars[cte_start + t];
       AD<double> epsi1 = vars[epsi_start + t];
-/*
-      AD<double> x1 = vars[x_start + t];
-      AD<double> y1 = vars[y_start + t];
-      AD<double> psi1 = vars[psi_start + t];
-      AD<double> v1 = vars[v_start + t];
-      AD<double> cte1 = vars[cte_start + t];
-      AD<double> epsi1 = vars[epsi_start + t];
-*/
+
       AD<double> delta = vars[delta_start + t - 1];
       AD<double> a = vars[a_start + t - 1];
-      if (t > 1) {   // use previous actuations (to account for latency)
+      // Set it to one before to account for delay.
+      if (t > 1)
+      {   
         a = vars[a_start + t - 2];
         delta = vars[delta_start + t - 2];
       }
-
+      // Diffs.
       AD<double> f0 = coeffs[0] + coeffs[1] * x0 + coeffs[2] * x0 * x0 + coeffs[3] * x0 * x0 * x0;
       AD<double> psides0 = CppAD::atan(3 * coeffs[3] * x0 * x0 + 2 * coeffs[2] * x0 + coeffs[1]);
-/*
-      AD<double> a = vars[a_start + t - 1];
-      AD<double> delta = vars[delta_start + t - 1];
-      if (t > 1) {   // use previous actuations (to account for latency)
-        a = vars[a_start + t - 2];
-        delta = vars[delta_start + t - 2];
-      }
-      AD<double> f0 = coeffs[0] + coeffs[1] * x0 + coeffs[2] * CppAD::pow(x0, 2) + coeffs[3] * CppAD::pow(x0, 3);
-      AD<double> psides0 = CppAD::atan(coeffs[1] + 2 * coeffs[2] * x0 + 3 * coeffs[3] * CppAD::pow(x0, 2));
-*/
       // Here's `x` to get you started.
       // The idea here is to constraint this value to be 0.
       //
       // NOTE: The use of `AD<double>` and use of `CppAD`!
       // This is also CppAD can compute derivatives and pass
       // these to the solver.
-
       // TODO: Setup the rest of the model constraints
       fg[1 + x_start + t] = x1 - (x0 + v0 * CppAD::cos(psi0) * dt);
       fg[1 + y_start + t] = y1 - (y0 + v0 * CppAD::sin(psi0) * dt);
@@ -256,12 +243,12 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   ok &= solution.status == CppAD::ipopt::solve_result<Dvector>::success;
 
 //  auto cost = solution.obj_value;
-  std::cout << "Solution " << solution.x << std::endl;
+//  std::cout << "Solution " << solution.x << std::endl;
   
   traj_x.clear();
   traj_y.clear();
-  std::cout << "Solution ";
-  std::cout << solution.x;
+//  std::cout << "Solution ";
+//  std::cout << solution.x;
   for(int i = 0; i < N-1; i++)
   {
     traj_x.push_back(solution.x[x_start + i + 1]);
