@@ -18,6 +18,8 @@ class MPC {
 
   vector<double> traj_x;
   vector<double> traj_y;
+
+  vector<double> costfactor;
 };
 
 #endif /* MPC_H */

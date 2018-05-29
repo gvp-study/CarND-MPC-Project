@@ -65,11 +65,20 @@ Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
   return result;
 }
 
-int main() {
+std::vector<double> costfactor = {3000.0, 3000.0, 1.0, 5.0, 5.0, 700.0, 200.0, 10.0};
+
+int main(int argc, char** argv)
+{
   uWS::Hub h;
 
   // MPC is initialized here!
   MPC mpc;
+  mpc.costfactor = costfactor;
+  for(int i = 0; i < 8; i++)
+  {
+    if(argc > i+1)
+      mpc.costfactor[i] = atof(argv[i+1]);
+  }
 
   h.onMessage([&mpc](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {

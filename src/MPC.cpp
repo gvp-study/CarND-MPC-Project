@@ -21,7 +21,7 @@ double dt = 0.1;
 // This is the length from front to CoG that has a similar radius.
 const double Lf = 2.67;
 
-double ref_v = 70;
+double ref_v = 80;
 size_t x_start = 0;
 size_t y_start = x_start + N;
 size_t psi_start = y_start + N;
@@ -33,8 +33,8 @@ size_t a_start = delta_start + N - 1;
 
 double cost_cte = 3000.0;
 double cost_epsi = 3000.0;
-double cost_delta = 5.0;
 double cost_v = 1.0;
+double cost_delta = 5.0;
 double cost_a = 5.0;
 double cost_deltav = 700.0;
 double cost_deltadot = 200.0;
@@ -54,28 +54,32 @@ class FG_eval {
     // The cost is stored is the first element of `fg`.
     // Any additions to the cost should be added to `fg[0]`.
     fg[0] = 0;
-
-    for (int i = 0; i < N; i++) {
+    // Make the error cost high for cte, epsi and diff from ref_v.
+    for (int i = 0; i < N; i++)
+    {
       fg[0] += cost_cte*CppAD::pow(vars[cte_start + i], 2);
       fg[0] += cost_epsi*CppAD::pow(vars[epsi_start + i], 2);
       fg[0] += cost_v*CppAD::pow(vars[v_start + i] - ref_v, 2);
     }
-
-    for (int i = 0; i < N - 1; i++) {
+    //  Price the  use of actuators high.
+    for (int i = 0; i < N - 1; i++)
+    {
       fg[0] += cost_delta*CppAD::pow(vars[delta_start + i], 2);
       fg[0] += cost_a*CppAD::pow(vars[a_start + i], 2);
-      // try adding penalty for speed + steer
-      fg[0] += cost_deltav*CppAD::pow(vars[delta_start + i] * vars[v_start+i], 2);
+      // Price the product of steering action and velocity
+      fg[0] += cost_deltav*CppAD::pow(vars[delta_start + i] * vars[v_start + i], 2);
+//      fg[0] += 1*CppAD::pow(vars[delta_start + i] * vars[v_start + i], 2);
+//      fg[0] += 10*CppAD::pow(CppAD::cos(vars[psi_start + i]) * vars[v_start + i], 1);
     }
-
-    for (int i = 0; i < N - 2; i++) {
+    // Price the gap between sequential actuations high.
+    for (int i = 0; i < N - 2; i++)
+    {
       fg[0] += cost_deltadot*CppAD::pow(vars[delta_start + i + 1] - vars[delta_start + i], 2);
       fg[0] += cost_adot*CppAD::pow(vars[a_start + i + 1] - vars[a_start + i], 2);
     }
     // Initial constraints
     //
-    // We add 1 to each of the starting indices due to cost being located at
-    // index 0 of `fg`.
+    // We add 1 to each of the starting indices due to cost being located at index 0 of `fg`.
     // This bumps up the position of all the other values.
     fg[1 + x_start] = vars[x_start];
     fg[1 + y_start] = vars[y_start];
@@ -142,11 +146,11 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   // For example: If the state is a 4 element vector, the actuators is a 2
   // element vector and there are 10 timesteps. The number of variables is:
   //
-  double x = state[0];
-  double y = state[1];
-  double psi = state[2];
-  double v = state[3];
-  double cte = state[4];
+  double x    = state[0];
+  double y    = state[1];
+  double psi  = state[2];
+  double v    = state[3];
+  double cte  = state[4];
   double epsi = state[5];
 
   // number of independent variables
@@ -218,6 +222,14 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   constraints_upperbound[cte_start] = cte;
   constraints_upperbound[epsi_start] = epsi;
 
+  cost_cte = costfactor[0];
+  cost_epsi = costfactor[1];
+  cost_v = costfactor[2];
+  cost_delta = costfactor[3];
+  cost_a = costfactor[4];
+  cost_deltav = costfactor[5];
+  cost_deltadot = costfactor[6];
+  cost_adot = costfactor[7];
   // Object that computes objective and constraints
   FG_eval fg_eval(coeffs);
 
@@ -236,37 +248,29 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   CppAD::ipopt::solve<Dvector, FG_eval>(
       options, vars, vars_lowerbound, vars_upperbound, constraints_lowerbound,
       constraints_upperbound, fg_eval, solution);
-
   //
   // Check some of the solution values
   //
   ok &= solution.status == CppAD::ipopt::solve_result<Dvector>::success;
 
-//  auto cost = solution.obj_value;
-//  std::cout << "Solution " << solution.x << std::endl;
-  
   traj_x.clear();
   traj_y.clear();
-//  std::cout << "Solution ";
-//  std::cout << solution.x;
+
   for(int i = 0; i < N-1; i++)
   {
     traj_x.push_back(solution.x[x_start + i + 1]);
     traj_y.push_back(solution.x[y_start + i + 1]);
-//    std::cout << "[" << solution.x[x_start + i] << " " << solution.x[y_start + i] << "] ";
   }
-  std::cout << std::endl;
-  
   auto cost = solution.obj_value;
-  std::cout << "Cost " << cost;
-  std::cout << " X " << solution.x[x_start + 1];
-  std::cout << " Y " << solution.x[y_start + 1];
-  std::cout << " PSI " << solution.x[psi_start + 1];
-  std::cout << " V " << solution.x[v_start + 1];
-  std::cout << " CTE " << solution.x[cte_start + 1];
-  std::cout << " EPSI " << solution.x[epsi_start + 1];
-  std::cout << " delta " << solution.x[delta_start];
-  std::cout << " a " << solution.x[a_start];
+  std::cout << "Cost \t" << cost;
+  std::cout << " X \t" << solution.x[x_start + 1];
+  std::cout << " Y \t" << solution.x[y_start + 1];
+  std::cout << " PSI \t" << solution.x[psi_start + 1];
+  std::cout << " V \t" << solution.x[v_start + 1];
+  std::cout << " CTE \t" << solution.x[cte_start + 1];
+  std::cout << " EPSI \t" << solution.x[epsi_start + 1];
+  std::cout << " delta \t" << solution.x[delta_start];
+  std::cout << " a \t" << solution.x[a_start];
   std::cout << std::endl;
   return {solution.x[x_start + 1],   solution.x[y_start + 1],
           solution.x[psi_start + 1], solution.x[v_start + 1],
