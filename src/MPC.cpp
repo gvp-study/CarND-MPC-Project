@@ -68,7 +68,6 @@ class FG_eval {
       fg[0] += cost_a*CppAD::pow(vars[a_start + i], 2);
       // Price the product of steering action and velocity
       fg[0] += cost_deltav*CppAD::pow(vars[delta_start + i] * vars[v_start + i], 2);
-//      fg[0] += 1*CppAD::pow(vars[delta_start + i] * vars[v_start + i], 2);
 //      fg[0] += 10*CppAD::pow(CppAD::cos(vars[psi_start + i]) * vars[v_start + i], 1);
     }
     // Price the gap between sequential actuations high.
@@ -107,7 +106,9 @@ class FG_eval {
 
       AD<double> delta = vars[delta_start + t - 1];
       AD<double> a = vars[a_start + t - 1];
-      // Set it to one before to account for delay.
+      //
+      // Account for delay is seeing result of action to be 1 cycle behind.
+      //
       if (t > 1)
       {   
         a = vars[a_start + t - 2];
@@ -128,7 +129,7 @@ class FG_eval {
       fg[1 + psi_start + t] = psi1 - (psi0 - v0/Lf * delta * dt);
       fg[1 + v_start + t] = v1 - (v0 + a * dt);
       fg[1 + cte_start + t] = cte1 - ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt));
-      fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) - v0/Lf * delta * dt);
+      fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) + v0/Lf * delta * dt);
     }
   }
 };
@@ -152,6 +153,26 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   double v    = state[3];
   double cte  = state[4];
   double epsi = state[5];
+  //
+  // Incorporate delay. Predict state after latency and pass that to the solver
+  //
+  static double last_delta = 0;
+  static double last_a = 0;
+  // Does not work as well as accounting for it in constraint above so set to 0.
+  double delay = 0.0;
+  double x_new = x + v*cos(psi)*delay;
+  double y_new = y + v*sin(psi)*delay;
+  double psi_new = psi + v / Lf * last_delta * delay;
+  double v_new = v + last_a * delay;
+  double cte_new = cte + v * sin(epsi) * delay;
+  double epsi_new = epsi + v / Lf * last_delta * delay;
+
+  x = x_new;
+  y = y_new;
+  psi = psi_new;
+  v = v_new;
+  cte = cte_new;
+  epsi = epsi_new;
 
   // number of independent variables
   // N timesteps == N - 1 actuations
@@ -255,7 +276,8 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
 
   traj_x.clear();
   traj_y.clear();
-
+  last_delta = solution.x[delta_start];
+  last_a = solution.x[a_start];
   for(int i = 0; i < N-1; i++)
   {
     traj_x.push_back(solution.x[x_start + i + 1]);
