@@ -11,6 +11,7 @@
 
 // for convenience
 using json = nlohmann::json;
+using namespace std::chrono;
 
 // For converting back and forth between radians and degrees.
 constexpr double pi() { return M_PI; }
@@ -65,10 +66,16 @@ Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
   return result;
 }
 
-std::vector<double> costfactor = {3000.0, 3000.0, 1.0, 5.0, 5.0, 700.0, 200.0, 10.0};
+high_resolution_clock::time_point current_t = high_resolution_clock::now();
+std::vector<double> costfactor = {100.0, 1000.0, 1.0, 1.0, 1.0, 100.0, 100.0, 10.0};
+double total_time = 0.0;
+double total_cte = 0.0;
+FILE* fp = NULL;
+
 
 int main(int argc, char** argv)
 {
+  fp = fopen("cte.txt", "w+");
   uWS::Hub h;
 
   // MPC is initialized here!
@@ -100,7 +107,14 @@ int main(int argc, char** argv)
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
-
+	  //
+	  // Mark time.
+	  //
+	  high_resolution_clock::time_point t2 = high_resolution_clock::now();
+	  duration<double> del = duration_cast<duration<double>>(t2 - current_t);
+	  double dt = del.count();
+	  current_t = t2;
+	  total_time += dt;
           /*
           * TODO: Calculate steering angle and throttle using MPC.
           *
@@ -186,6 +200,14 @@ int main(int argc, char** argv)
           // SUBMITTING.
           this_thread::sleep_for(chrono::milliseconds(100));
           ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+	  //
+	  // Append the RMSE to a file to analyze the effect of std_a and std_yawdd on RMSEE
+	  //
+	  if(fp)
+	  {
+	    fprintf(fp, "%.2f %.2f %.2f %.2f %.2f\n",
+		    total_time, cte, rad2deg(epsi), steer_value, v);
+	  }
         }
       } else {
         // Manual driving
