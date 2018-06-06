@@ -29,13 +29,17 @@ All the code for this project has been derived from the example code in the cour
 
 I implemented the MPC control based on the lessons and looking at links to the implementations suggested by David Silver. (https://medium.com/self-driving-cars/five-different-udacity-student-controllers-4b13cc8f2d0f)
 
-Unlike the PID controller, the MPC explicitly uses the kinematic model of the car and its control actuators to predict its state. More importantly, it incorporates the non linear system solver which can optimize a very general cost function. This lets us optimize for various driving parameters such as smoothness, cross track error, orientation error, change in the actuators etc.
+Unlike the PID controller, the MPC explicitly uses the kinematic model of the car and its control actuators to predict its state. More importantly, it incorporates the non linear system solver which can optimize a very general cost function over a large number of future states. This lets us optimize for various driving parameters such as smoothness, cross track error, orientation error, change in the actuators etc.
 
 ## Model
-The state of the car at every instant of time is defined by a six element vector X = (x, y, ψ​, v, cte, eψ​). (x, y, ψ​) are the coordinates of the car pose in global coordinates. (v) is the velocity. (cte, eψ​) are the error in distance and angle from the desired pose in the road.
+The state of the car at every instant of time is defined by a six element vector X = (x, y, ψ​, v, cte, eψ​). The first three (x, y, ψ​) are the coordinates of the car pose in global coordinates. (v) is the velocity. The last two (cte, eψ​) are the error in distance and angle from the desired pose in the road.
 The control inputs to the car are its steering angle and throttle u = (δ​, a).
-The Kinematic equations used for updating vehicle state are as follows. Lf is the distance between the front of the car and the center of gravity of the car which decides the effect of the steering on the actual turning of the car.
-The state transition equation based on the kinematics of the system is as shown below. This Xt+1 = A*Xt + b*ut
+The Kinematic equations used for updating vehicle state is based on the following equation based on the kinematics defined by **A** and the control **b**.
+```
+Xt+1 = A*Xt + b*ut
+```
+The distance Lf between the front of the car and the center of gravity of the car which decides the effect of the steering on the actual turning of the car.
+The state transition equation based on the kinematics of the system is as shown below.
 ```
 x​t+1​​ = x​t ​​+ v​t ​​∗ cos(ψ​t​​) ∗ dt
 y​t+1​​ = y​t​​ + v​t​​ ∗ sin(ψ​t​​) ∗ dt
@@ -44,13 +48,13 @@ v​t+1​​ = v​t​​ + a​t ​​∗ dt
 cte​t+1​​ = f(x​t​​) − y​t ​​+ (v​t​​ ∗ sin(eψ​t​​) ∗ dt)
 eψ​t+1​​ = eψ​t​​ +​ L​f ​* ​​​v​t​​​​ ∗ δ​t​​ ∗ dt
 ```
-The model defines the state of the car N steps ahead of its current state. It does this by augmenting its six states with the N*6 future states.  It also augments the state further by adding the (N-1) control inputs that are used in between the N states. The result is a (6N + 2N - 2) state vector. For N=10 this will result in a 78 element state vector.
+The model defines the state of the car for N steps ahead of its current state. It does this by augmenting its six state elements with the N*6 future state elements. It also augments the state further by adding the (N-1) control inputs that are used in between the N states. The result is a (6N + 2N - 2) state vector. For N=10 this will result in a 78 element state vector.
 The state elements corresponding to the time t+1 of this large state vector is related to its previous time t as shown in the kinematic equation above. The time interval dt between t+1 and t is the time between actuations.
 ## Timestep Length and Elapsed Duration (N & dt)
-The values of N and dt was decided by trial and error. I started out with N=10 and t=0.1 sec. I then increased N=20 and t=0.1 and the car seemed to be tracking the road very well for the gentle turns and the straights but it became unstable at the big third turn and beyond. I also tried to use N=10 and t=0.05 and it caused the car to weave about the center line. So I finally settled on N=10 and t=0.1.
+The values of N and dt was decided by trial and error. I started out with N=10 and t=0.1 sec which worked well. I then increased N=20 and t=0.1 and the car seemed to be tracking the road better for the gentle turns and the straights but it became unstable at the big third turn and beyond. I also tried to use N=10 and t=0.05 and it caused the car to weave about the center line. So I finally settled on N=10 and t=0.1.
 ## Constraints
-The system defining the car has constraints on both the actuator inputs u and the state vector X.
-The constraints on the state vector X is defined exactly by the state equations given above.
+The ipopt solver requires the user to supply the upper and lower limits of all the state elements explicitly. The system defining the car has constraints on both the actuator inputs u and the state vector X.
+The constraints on the state vector X is defined exactly by the state equations given above. This is done by constraining the error from the computed Xt+1 from the equations and the observed Xt+1 to zero.
 The constraints on the actuator inputs (δ​, a) are as follows.
 ```
 -25degs < (δ​) < +25degs
@@ -88,7 +92,7 @@ The cost function for the system based on the augmented state vector and actuato
     }
 ```
 The cost function that we are trying to minimize increases with the error (cte, epsi, v-ref_v).
-The cost also increases with the magnitude of the actuation (δ​, a, δ​ * v). This minimizes the use of the actuators and also penalizes high velocities during large turns by using their product (δ​ * v).
+The cost also increases with the magnitude of the actuation (δ​, a, δ​ * v). The first two elements minimizes the use of the actuators. The third element ​(δ​ * v) penalizes high velocities during large turns by using their product.
 The final set of costs are related to the change in the actuator values between cycles. This allows the driving be smooth.
 ## Fitting the 3rd Order Polynomial
 The desired path of the car is defined by a series of (x, y) points marking the center line of the road in front of the car. To allow the solver to be able to compute the solution, I first transformed the global way points to the local car coordinates. I then fitted a third order polynomial to these points using the polyfit function. The four coefficients returned by the polyfit function is then used by the ipopt solver.
@@ -106,11 +110,11 @@ The simulator allows for the simulation of a delay for the actuator to show up o
 ```
 I did try an alternative place to impose the latency by setting the current state to be the result of the state plus the result of the previous actuator values. This did not seem to work as well. So I commented that code out.
 ## Solving the Non-Linear System of Equations
-The optimal solution of the resulting model of N states and N-1 actuations is computed using a Ipopt solver. The solver uses the state equations, the constraints, and the polyfit coefficients to compute the optimal solution within a given time limit.
+The optimal solution of the resulting model of N states and N-1 actuations is computed using a Ipopt solver. The solver uses the state equations, the constraints, and the polyfit coefficients that fit the path. It uses all these to compute the optimal solution within a given time limit.
 The larger the value of N, the greater the computation needed to solve the nonlinear optimization problem. I used N=10 in my system to keep the computation well within the 100msec cycle time of the control loop.
 ## Command line arguments
 I made the mpc program to be able to take in arguments that could be used to set the weights for the eight objective functions.
-The mpc program can be run with default arguments for these eight objective function weights. They are as follows (The default values are in parenthesis)
+The mpc program when called without arguments use these default arguments for these eight objective function weights. They are as follows (The default values are in parenthesis)
 * CTE cost factor (100)
 * ErrorPsi cost factor (1000)
 * Velocity cost factor (1)
@@ -143,7 +147,7 @@ Note that the velocity plot in red is normalized to a maximum velocity of 100mph
 ### mpc 100 1000 1 1 1 100 100 10
 ![alt text][image7]
 
-Notice that the final default parameter set I chose shown above allows the simulator to maintain the steady 78mph speed through most of the curves and the straights. The CTE and EPSI in this case is much larger than for the previous sets of parameters. I also found that the relaxation of the CTE errors allows the car to cut corners to maintain the speed similar to the techniques used by race car drivers when they take corners.
+Notice that the final default parameter set I chose shown above allows the simulator to maintain the steady 78mph speed through most of the curves and the straights. I let the CTE and EPSI in this case to be much larger than for the previous sets of parameters as long as it kept the car within the road. I also found that the relaxation of the CTE errors allows the car to cut corners to maintain the speed similar to the techniques used by race car drivers when they take corners.
 I let the simulator run several laps over time to make sure that the chosen parameters resulted in a stable control system.
 
 Some of the still images of the run are shown below.
