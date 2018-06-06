@@ -44,8 +44,10 @@ v​t+1​​ = v​t​​ + a​t ​​∗ dt
 cte​t+1​​ = f(x​t​​) − y​t ​​+ (v​t​​ ∗ sin(eψ​t​​) ∗ dt)
 eψ​t+1​​ = eψ​t​​ +​ L​f ​* ​​​v​t​​​​ ∗ δ​t​​ ∗ dt
 
-The model defines the state of the car N steps ahead of its current state. It does this by augmenting its six states with the N*6 future states. It also augments the state further by adding the (N-1) control inputs that are used in between the N states. The result is a (6N + 2N - 2) state vector. For N=10 this will result in a 78 element state vector.
-The state elements corresponding to the time t+1 of this large state vector is related to its previous time t as shown in the kinematic equation above.
+The model defines the state of the car N steps ahead of its current state. It does this by augmenting its six states with the N*6 future states.  It also augments the state further by adding the (N-1) control inputs that are used in between the N states. The result is a (6N + 2N - 2) state vector. For N=10 this will result in a 78 element state vector.
+The state elements corresponding to the time t+1 of this large state vector is related to its previous time t as shown in the kinematic equation above. The time interval dt between t+1 and t is the time between actuations.
+## Timestep Length and Elapsed Duration (N & dt)
+The values of N and dt was decided by trial and error. I started out with N=10 and t=0.1 sec. I then increased N=20 and t=0.1 and the car seemed to be tracking the road very well for the gentle turns and the straights but it became unstable at the big third turn and beyond. I also tried to use N=10 and t=0.05 and it caused the car to weave about the center line. So I finally settled on N=10 and t=0.1.
 ## Constraints
 The system defining the car has constraints on both the actuator inputs u and the state vector X.
 The constraints on the state vector X is defined exactly by the state equations given above.
@@ -87,7 +89,7 @@ The cost function that we are trying to minimize increases with the error (cte, 
 The cost also increases with the magnitude of the actuation (δ​, a, δ​ * v). This minimizes the use of the actuators and also penalizes high velocities during large turns by using their product (δ​ * v).
 The final set of costs are related to the change in the actuator values between cycles. This allows the driving be smooth.
 ## Fitting the 3rd Order Polynomial
-The desired path of the car is defined by a series of (x, y) points marking the center line of the road in front of the car. To allow the solver to be able to compute the solution, we fit a third order polynomial to these points using the polyfit function. The four coefficients returned by the polyfit function is then used by the ipopt solver.
+The desired path of the car is defined by a series of (x, y) points marking the center line of the road in front of the car. To allow the solver to be able to compute the solution, I first transformed the global way points to the local car coordinates. I then fitted a third order polynomial to these points using the polyfit function. The four coefficients returned by the polyfit function is then used by the ipopt solver.
 ## Latency
 The simulator allows for the simulation of a delay for the actuator to show up on the physical system. This makes it mimic real life systems where the delay is unavoidable. This latency can be modeled into the state equations. I put them in the constraints on the actuator state variables u as shown below.
 ```
@@ -100,6 +102,7 @@ The simulator allows for the simulation of a delay for the actuator to show up o
         delta = vars[delta_start + t - 2];
       }
 ```
+I did try an alternative place to impose the latency by setting the current state to be the result of the state plus the result of the previous actuator values. This did not seem to work as well. So I commented that code out.
 ## Solving the Non-Linear System of Equations
 The optimal solution of the resulting model of N states and N-1 actuations is computed using a Ipopt solver. The solver uses the state equations, the constraints, and the polyfit coefficients to compute the optimal solution within a given time limit.
 The larger the value of N, the greater the computation needed to solve the nonlinear optimization problem. I used N=10 in my system to keep the computation well within the 100msec cycle time of the control loop.
@@ -140,6 +143,7 @@ Note that the velocity plot in red is normalized to a maximum velocity of 100mph
 
 Notice that the final default parameter set I chose shown above allows the simulator to maintain the steady 78mph speed through most of the curves and the straights. The CTE and EPSI in this case is much larger than for the previous sets of parameters. I also found that the relaxation of the CTE errors allows the car to cut corners to maintain the speed similar to the techniques used by race car drivers when they take corners.
 I let the simulator run several laps over time to make sure that the chosen parameters resulted in a stable control system.
+
 Some of the still images of the run are shown below.
 ![alt text][image8]
 ![alt text][image9]

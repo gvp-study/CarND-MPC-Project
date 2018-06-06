@@ -32,7 +32,7 @@ size_t delta_start = epsi_start + N;
 size_t a_start = delta_start + N - 1;
 
 double cost_cte = 100.0;
-double cost_epsi = 100.0;
+double cost_epsi = 1000.0;
 double cost_v = 1.0;
 double cost_delta = 1.0;
 double cost_a = 1.0;
@@ -107,7 +107,7 @@ class FG_eval {
       AD<double> delta = vars[delta_start + t - 1];
       AD<double> a = vars[a_start + t - 1];
       //
-      // Account for delay is seeing result of action to be 1 cycle behind.
+      // Account for delay in seeing result of action to be 1 cycle behind.
       //
       if (t > 1)
       {   
