@@ -36,14 +36,14 @@ The state of the car at every instant of time is defined by a six element vector
 The control inputs to the car are its steering angle and throttle u = (δ​, a).
 The Kinematic equations used for updating vehicle state are as follows. Lf is the distance between the front of the car and the center of gravity of the car which decides the effect of the steering on the actual turning of the car.
 The state transition equation based on the kinematics of the system is as shown below. This Xt+1 = A*Xt + b*ut
-
+```
 x​t+1​​ = x​t ​​+ v​t ​​∗ cos(ψ​t​​) ∗ dt
 y​t+1​​ = y​t​​ + v​t​​ ∗ sin(ψ​t​​) ∗ dt
 ψ​t+1​​ = ψ​t​​ +​ L​f​​​​ * v​t​​​​ ∗ δ ∗ dt
 v​t+1​​ = v​t​​ + a​t ​​∗ dt
 cte​t+1​​ = f(x​t​​) − y​t ​​+ (v​t​​ ∗ sin(eψ​t​​) ∗ dt)
 eψ​t+1​​ = eψ​t​​ +​ L​f ​* ​​​v​t​​​​ ∗ δ​t​​ ∗ dt
-
+```
 The model defines the state of the car N steps ahead of its current state. It does this by augmenting its six states with the N*6 future states.  It also augments the state further by adding the (N-1) control inputs that are used in between the N states. The result is a (6N + 2N - 2) state vector. For N=10 this will result in a 78 element state vector.
 The state elements corresponding to the time t+1 of this large state vector is related to its previous time t as shown in the kinematic equation above. The time interval dt between t+1 and t is the time between actuations.
 ## Timestep Length and Elapsed Duration (N & dt)
@@ -52,8 +52,10 @@ The values of N and dt was decided by trial and error. I started out with N=10 a
 The system defining the car has constraints on both the actuator inputs u and the state vector X.
 The constraints on the state vector X is defined exactly by the state equations given above.
 The constraints on the actuator inputs (δ​, a) are as follows.
+```
 -25degs < (δ​) < +25degs
 -1 < (a) < +1
+```
 ## Cost Function
 The cost function for the system based on the augmented state vector and actuator is as follows.
 ```
