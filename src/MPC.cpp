@@ -21,7 +21,7 @@ double dt = 0.1;
 // This is the length from front to CoG that has a similar radius.
 const double Lf = 2.67;
 
-double ref_v = 80;
+double ref_v = 80*0.44704;
 size_t x_start = 0;
 size_t y_start = x_start + N;
 size_t psi_start = y_start + N;
@@ -109,11 +109,13 @@ class FG_eval {
       //
       // Account for delay in seeing result of action to be 1 cycle behind.
       //
+      /*
       if (t > 1)
       {   
         a = vars[a_start + t - 2];
         delta = vars[delta_start + t - 2];
       }
+      */
       // Diffs.
       AD<double> f0 = coeffs[0] + coeffs[1] * x0 + coeffs[2] * x0 * x0 + coeffs[3] * x0 * x0 * x0;
       AD<double> psides0 = CppAD::atan(3 * coeffs[3] * x0 * x0 + 2 * coeffs[2] * x0 + coeffs[1]);
@@ -126,10 +128,10 @@ class FG_eval {
       // TODO: Setup the rest of the model constraints
       fg[1 + x_start + t] = x1 - (x0 + v0 * CppAD::cos(psi0) * dt);
       fg[1 + y_start + t] = y1 - (y0 + v0 * CppAD::sin(psi0) * dt);
-      fg[1 + psi_start + t] = psi1 - (psi0 - v0/Lf * delta * dt);
+      fg[1 + psi_start + t] = psi1 - (psi0 - v0/Lf * -delta * dt);
       fg[1 + v_start + t] = v1 - (v0 + a * dt);
       fg[1 + cte_start + t] = cte1 - ((f0 - y0) + (v0 * CppAD::sin(epsi0) * dt));
-      fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) + v0/Lf * delta * dt);
+      fg[1 + epsi_start + t] = epsi1 - ((psi0 - psides0) + v0/Lf * -delta * dt);
     }
   }
 };
@@ -153,26 +155,6 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   double v    = state[3];
   double cte  = state[4];
   double epsi = state[5];
-  //
-  // Incorporate delay. Predict state after latency and pass that to the solver
-  //
-  static double last_delta = 0;
-  static double last_a = 0;
-  // Does not work as well as accounting for it in constraint above so set to 0.
-  double delay = 0.0;
-  double x_new = x + v*cos(psi)*delay;
-  double y_new = y + v*sin(psi)*delay;
-  double psi_new = psi + v / Lf * last_delta * delay;
-  double v_new = v + last_a * delay;
-  double cte_new = cte + v * sin(epsi) * delay;
-  double epsi_new = epsi + v / Lf * last_delta * delay;
-
-  x = x_new;
-  y = y_new;
-  psi = psi_new;
-  v = v_new;
-  cte = cte_new;
-  epsi = epsi_new;
 
   // number of independent variables
   // N timesteps == N - 1 actuations
@@ -276,8 +258,6 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
 
   traj_x.clear();
   traj_y.clear();
-  last_delta = solution.x[delta_start];
-  last_a = solution.x[a_start];
   for(int i = 0; i < N-1; i++)
   {
     traj_x.push_back(solution.x[x_start + i + 1]);

@@ -71,7 +71,7 @@ std::vector<double> costfactor = {100.0, 1000.0, 1.0, 1.0, 1.0, 100.0, 100.0, 10
 double total_time = 0.0;
 double total_cte = 0.0;
 FILE* fp = NULL;
-
+const double Lf = 2.67;
 
 int main(int argc, char** argv)
 {
@@ -107,6 +107,7 @@ int main(int argc, char** argv)
           double py = j[1]["y"];
           double psi = j[1]["psi"];
           double v = j[1]["speed"];
+	  v *= 0.44704;
 	  //
 	  // Mark time.
 	  //
@@ -146,12 +147,31 @@ int main(int argc, char** argv)
 
           double steer_value = j[1]["steering_angle"];
           double throttle_value = j[1]["throttle"];
+	  //
+	  // Add the latency to the state.
+	  //
+	  double latency = 0.1;
+	  double delta = -steer_value;
+	  double a = throttle_value;
+	  //
+	  // New local pose based on last control inputs.
+	  //
+	  psi = delta;
+	  px = 0.0 + v * cos(psi) * latency;
+	  py = 0.0 + v * sin(psi) * latency;
+	  cte = cte + v * sin(epsi) * latency;
+	  epsi = epsi + v/Lf * delta * latency;
+	  psi = psi + v/Lf * delta * latency;
+	  v = v + a * latency;
 
+	  //
+	  // Solve the system for optimal states and the control inputs.
+	  //
           Eigen::VectorXd state(6);
-          state << 0, 0, 0, v, cte, epsi;
+          state << px, py, psi, v, cte, epsi;
 	  vector<double> solution = mpc.Solve(state, coeffs);
 
-	  steer_value = solution[6];
+	  steer_value = -solution[6];
 	  throttle_value = solution[7];
 
           json msgJson;
@@ -169,7 +189,11 @@ int main(int argc, char** argv)
 
           msgJson["mpc_x"] = mpc_x_vals;
           msgJson["mpc_y"] = mpc_y_vals;
-
+	  for(int i = 0; i < mpc_x_vals.size(); i++)
+	  {
+	    std::cout << "[" << mpc_x_vals[i] << " " << mpc_y_vals[i] << "] ";
+	  }
+	  std::cout << std::endl;
           // Display the waypoints/reference line
           vector<double> next_x_vals;
           vector<double> next_y_vals;
@@ -180,8 +204,10 @@ int main(int argc, char** argv)
           for (double i = 0; i < 50; i++){
             next_x_vals.push_back(i);
             next_y_vals.push_back(polyeval(coeffs, i));
+	    if(i < 10)
+	      std::cout << "[" << i << " " << polyeval(coeffs, i) << "] ";
           }
-
+	  std::cout << std::endl;
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
 
