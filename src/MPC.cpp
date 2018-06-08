@@ -1,9 +1,11 @@
 #include "MPC.h"
+#include <chrono>
 #include <cppad/cppad.hpp>
 #include <cppad/ipopt/solve.hpp>
 #include "Eigen-3.3/Eigen/Core"
 
 using CppAD::AD;
+using namespace std::chrono;
 
 // TODO: Set the timestep length and duration
 size_t N = 10;
@@ -21,7 +23,7 @@ double dt = 0.1;
 // This is the length from front to CoG that has a similar radius.
 const double Lf = 2.67;
 
-double ref_v = 80*0.44704;
+double ref_v = 100*0.44704;
 size_t x_start = 0;
 size_t y_start = x_start + N;
 size_t psi_start = y_start + N;
@@ -39,7 +41,6 @@ double cost_a = 1.0;
 double cost_deltav = 100.0;
 double cost_deltadot = 100.0;
 double cost_adot = 10.0;
-
 
 class FG_eval {
  public:
@@ -243,14 +244,19 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   options += "Sparse  true        reverse\n";
 
   options += "Numeric max_cpu_time        0.5\n";
+//  options += "print_timing_statistics     yes\n";
 
+  high_resolution_clock::time_point start = high_resolution_clock::now();
   // place to return solution
   CppAD::ipopt::solve_result<Dvector> solution;
-  
   // solve the problem
   CppAD::ipopt::solve<Dvector, FG_eval>(
       options, vars, vars_lowerbound, vars_upperbound, constraints_lowerbound,
       constraints_upperbound, fg_eval, solution);
+  // Time it.
+  high_resolution_clock::time_point end = high_resolution_clock::now();
+  duration<double> del = duration_cast<duration<double>>(end - start);
+  double dt = del.count();
   //
   // Check some of the solution values
   //
@@ -273,6 +279,7 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs) {
   std::cout << " EPSI \t" << solution.x[epsi_start + 1];
   std::cout << " delta \t" << solution.x[delta_start];
   std::cout << " a \t" << solution.x[a_start];
+  std::cout << " DT \t" << dt;
   std::cout << std::endl;
   return {solution.x[x_start + 1],   solution.x[y_start + 1],
           solution.x[psi_start + 1], solution.x[v_start + 1],

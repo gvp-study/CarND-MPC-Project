@@ -156,7 +156,10 @@ int main(int argc, char** argv)
 	  //
 	  // New local pose based on last control inputs.
 	  //
-	  psi = delta;
+	  if(v > 20*0.44704)
+	    psi = delta;
+	  else
+	    psi = 0.0;
 	  px = 0.0 + v * cos(psi) * latency;
 	  py = 0.0 + v * sin(psi) * latency;
 	  cte = cte + v * sin(epsi) * latency;
@@ -189,11 +192,6 @@ int main(int argc, char** argv)
 
           msgJson["mpc_x"] = mpc_x_vals;
           msgJson["mpc_y"] = mpc_y_vals;
-	  for(int i = 0; i < mpc_x_vals.size(); i++)
-	  {
-	    std::cout << "[" << mpc_x_vals[i] << " " << mpc_y_vals[i] << "] ";
-	  }
-	  std::cout << std::endl;
           // Display the waypoints/reference line
           vector<double> next_x_vals;
           vector<double> next_y_vals;
@@ -204,13 +202,9 @@ int main(int argc, char** argv)
           for (double i = 0; i < 50; i++){
             next_x_vals.push_back(i);
             next_y_vals.push_back(polyeval(coeffs, i));
-	    if(i < 10)
-	      std::cout << "[" << i << " " << polyeval(coeffs, i) << "] ";
           }
-	  std::cout << std::endl;
           msgJson["next_x"] = next_x_vals;
           msgJson["next_y"] = next_y_vals;
-
 
           auto msg = "42[\"steer\"," + msgJson.dump() + "]";
           //std::cout << msg << std::endl;
@@ -232,7 +226,7 @@ int main(int argc, char** argv)
 	  if(fp)
 	  {
 	    fprintf(fp, "%.2f %.2f %.2f %.2f %.2f\n",
-		    total_time, cte, rad2deg(epsi), steer_value, v);
+		    total_time, cte, rad2deg(epsi), steer_value, v/0.44704);
 	  }
         }
       } else {
